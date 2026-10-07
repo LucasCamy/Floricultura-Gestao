@@ -1,0 +1,91 @@
+﻿name: floricultura-gestao
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: floricultura-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: floricultura_gestao
+      POSTGRES_USER: ${POSTGRES_USER:?Set POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+    ports:
+      - "32402:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:?Set POSTGRES_USER} -d floricultura_gestao",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  rabbitmq:
+    image: rabbitmq:4-management-alpine
+    container_name: floricultura-rabbitmq
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:?Set RABBITMQ_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?Set RABBITMQ_PASSWORD}
+    ports:
+      - "32403:5672"
+      - "32404:15672"
+    volumes:
+      - rabbitmqdata:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "check_port_connectivity"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: floricultura-api
+    restart: on-failure:5
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: http://+:8080
+      ApplyMigrations: "true"
+      ConnectionStrings__Default: "Host=postgres;Port=5432;Database=floricultura_gestao;Username=${POSTGRES_USER:?Set POSTGRES_USER};Password=${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}"
+      Jwt__Key: ${JWT_KEY:?Set JWT_KEY}
+      Jwt__Issuer: ${JWT_ISSUER:-FloriculturaGestao}
+      Jwt__Audience: ${JWT_AUDIENCE:-FloriculturaGestaoApp}
+      RabbitMQ__Host: rabbitmq
+      RabbitMQ__User: ${RABBITMQ_USER:?Set RABBITMQ_USER}
+      RabbitMQ__Password: ${RABBITMQ_PASSWORD:?Set RABBITMQ_PASSWORD}
+      AllowedOrigins: ${ALLOWED_ORIGINS:-http://localhost:32400}
+      BOOTSTRAP_ADMIN_NAME: ${BOOTSTRAP_ADMIN_NAME:-Administrador}
+      BOOTSTRAP_ADMIN_EMAIL: ${BOOTSTRAP_ADMIN_EMAIL:?Set BOOTSTRAP_ADMIN_EMAIL}
+      BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD:?Set BOOTSTRAP_ADMIN_PASSWORD}
+    ports:
+      - "32401:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        INTERNAL_API_URL: http://backend:8080
+    container_name: floricultura-frontend
+    restart: unless-stopped
+    environment:
+      INTERNAL_API_URL: http://backend:8080
+    ports:
+      - "32400:3000"
+    depends_on:
+      - backend
+
+volumes:
+  pgdata:
+  rabbitmqdata:

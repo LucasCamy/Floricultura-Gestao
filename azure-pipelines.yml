@@ -1,0 +1,119 @@
+﻿trigger:
+  branches:
+    include:
+      - main
+      - develop
+  paths:
+    exclude:
+      - "*.md"
+      - docs/**
+
+pool:
+  vmImage: "ubuntu-latest"
+
+variables:
+  DOTNET_VERSION: "10.0.x"
+  NODE_VERSION: "22.x"
+  backendPath: "backend"
+  frontendPath: "frontend"
+
+stages:
+  - stage: Build
+    displayName: "Build & Test"
+    jobs:
+      - job: Backend
+        displayName: "Backend (.NET)"
+        steps:
+          - task: UseDotNet@2
+            displayName: "Instalar .NET SDK"
+            inputs:
+              packageType: "sdk"
+              version: $(DOTNET_VERSION)
+
+          - script: dotnet restore FloriculturaGestao.slnx
+            displayName: "Restaurar pacotes NuGet"
+            workingDirectory: $(backendPath)
+
+          - script: dotnet build FloriculturaGestao.slnx -c Release --no-restore
+            displayName: "Build Release"
+            workingDirectory: $(backendPath)
+
+          - script: dotnet test FloriculturaGestao.slnx -c Release --no-build --logger trx --results-directory $(Agent.TempDirectory)/test-results
+            displayName: "Executar Testes"
+            workingDirectory: $(backendPath)
+            continueOnError: true
+
+          - task: PublishTestResults@2
+            displayName: "Publicar Resultados de Teste"
+            condition: always()
+            inputs:
+              testResultsFormat: "VSTest"
+              testResultsFiles: "$(Agent.TempDirectory)/test-results/**/*.trx"
+
+          - script: dotnet publish src/FloriculturaGestao.API/FloriculturaGestao.API.csproj -c Release -o $(Build.ArtifactStagingDirectory)/backend
+            displayName: "Publish API"
+            workingDirectory: $(backendPath)
+
+          - task: PublishBuildArtifacts@1
+            displayName: "Publicar Artefato Backend"
+            inputs:
+              PathtoPublish: "$(Build.ArtifactStagingDirectory)/backend"
+              ArtifactName: "backend"
+
+      - job: Frontend
+        displayName: "Frontend (Next.js)"
+        steps:
+          - task: NodeTool@0
+            displayName: "Instalar Node.js"
+            inputs:
+              versionSpec: $(NODE_VERSION)
+
+          - script: npm ci
+            displayName: "Instalar dependências"
+            workingDirectory: $(frontendPath)
+
+          - script: npm run build
+            displayName: "Build Next.js"
+            workingDirectory: $(frontendPath)
+
+          - task: ArchiveFiles@2
+            displayName: "Compactar build"
+            inputs:
+              rootFolderOrFile: "$(frontendPath)/.next"
+              includeRootFolder: false
+              archiveType: "zip"
+              archiveFile: "$(Build.ArtifactStagingDirectory)/frontend.zip"
+
+          - task: PublishBuildArtifacts@1
+            displayName: "Publicar Artefato Frontend"
+            inputs:
+              PathtoPublish: "$(Build.ArtifactStagingDirectory)/frontend.zip"
+              ArtifactName: "frontend"
+
+  - stage: Docker
+    displayName: "Build Docker Images"
+    dependsOn: Build
+    condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
+    jobs:
+      - job: BuildImages
+        displayName: "Build & Push Images"
+        steps:
+          - task: Docker@2
+            displayName: "Build Backend Image"
+            inputs:
+              command: build
+              Dockerfile: "$(backendPath)/Dockerfile"
+              buildContext: "$(backendPath)"
+              tags: |
+                $(Build.BuildId)
+                latest
+
+          - task: Docker@2
+            displayName: "Build Frontend Image"
+            inputs:
+              command: build
+              Dockerfile: "$(frontendPath)/Dockerfile"
+              buildContext: "$(frontendPath)"
+              tags: |
+                $(Build.BuildId)
+                latest

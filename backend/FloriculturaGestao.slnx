@@ -1,0 +1,8 @@
+﻿<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/FloriculturaGestao.API/FloriculturaGestao.API.csproj" />
+    <Project Path="src/FloriculturaGestao.Application/FloriculturaGestao.Application.csproj" />
+    <Project Path="src/FloriculturaGestao.Domain/FloriculturaGestao.Domain.csproj" />
+    <Project Path="src/FloriculturaGestao.Infrastructure/FloriculturaGestao.Infrastructure.csproj" />
+  </Folder>
+</Solution>

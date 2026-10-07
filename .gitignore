@@ -1,0 +1,36 @@
+# Dependências
+node_modules/
+.next/
+out/
+
+# Ambiente
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Build
+bin/
+obj/
+publish/
+
+# Docker
+docker-compose.override.yml
+
+# Secrets
+*.pfx
+*.pem
+
+# Local configuration and credentials
+.env
+.env.*
+!.env.example
+**/appsettings.Local.json
+**/appsettings.*.local.json
+**/secrets.json

@@ -1,0 +1,6 @@
+﻿@FloriculturaGestao.API_HostAddress = http://localhost:5177
+
+GET {{FloriculturaGestao.API_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
